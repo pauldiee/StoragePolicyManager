@@ -66,11 +66,18 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.0.0
+    Version  : 1.0.1
     Requires : VCF.PowerCLI 9.0+ (recommended) or VMware.PowerCLI 13+
     Tested   : vSphere 9
 
 .CHANGELOG
+    v1.0.1  2026-03-31  Paul van Dieen
+        - Added #Requires -Version 5.1 for explicit PS5 compatibility
+        - Refactored $buildRule script block to Build-PolicyRule function with
+          explicit parameters — avoids PS5 StrictMode closure edge cases
+        - Range constraint creation now falls back to minimum value with a
+          warning when New-SpbmCapabilityConstraintRange is unavailable
+
     v1.0.0  2026-03-31  Paul van Dieen
         - Initial release
         - Export mode: interactive picker lists all storage policies with rule
@@ -81,6 +88,8 @@
         - Credentials cached via Export-Clixml (DPAPI, Windows-only)
         - All cmdlets scoped with -Server to avoid cross-vCenter operations
 #>
+
+#Requires -Version 5.1
 
 [CmdletBinding()]
 param(
@@ -97,7 +106,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.0.0'
+$scriptVersion = '1.0.1'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -164,14 +173,14 @@ try {
     exit 1
 }
 
-# --- Helper: Serialize a single rule ------------------------------------------
+# --- Helper: Serialize a single rule to a PSCustomObject ----------------------
 function Export-PolicyRule {
     param($Rule)
     # Capability-based rule
     if ($Rule.PSObject.Properties['Capability'] -and $Rule.Capability) {
         $val     = $Rule.Value
         $valType = $val.GetType().Name
-        # Range value
+        # Range value — detected by presence of Minimum/Maximum properties
         if ($val.PSObject.Properties['Minimum'] -and $val.PSObject.Properties['Maximum']) {
             return [PSCustomObject]@{
                 Type           = 'Capability'
@@ -198,13 +207,66 @@ function Export-PolicyRule {
                 Name     = $_.Name
             }
         })
-        return [PSCustomObject]@{
-            Type = 'Tag'
-            Tags = $tags
-        }
+        return [PSCustomObject]@{ Type = 'Tag'; Tags = $tags }
     }
-    # Unknown
     return [PSCustomObject]@{ Type = 'Unknown' }
+}
+
+# --- Helper: Reconstruct a SpbmRule from serialized data ----------------------
+# Takes explicit parameters rather than a closure so it works correctly under
+# PS5 StrictMode where script-block variable capture can be unreliable.
+function Build-PolicyRule {
+    param(
+        [PSCustomObject]$RuleData,
+        [object[]]$AllCaps,
+        $ViConn
+    )
+    if ($RuleData.Type -eq 'Capability') {
+        $cap = $AllCaps | Where-Object { [string]$_.Id -eq $RuleData.CapabilityId } | Select-Object -First 1
+        if (-not $cap) {
+            Write-Host "         [WARN] Capability '$($RuleData.CapabilityId)' ($($RuleData.CapabilityName)) not found — rule skipped." -ForegroundColor Yellow
+            return $null
+        }
+        if ($RuleData.ValueType -eq 'Range') {
+            # New-SpbmCapabilityConstraintRange may not exist in all PowerCLI versions;
+            # fall back to minimum value with a warning if the cmdlet is unavailable.
+            try {
+                $range = New-SpbmCapabilityConstraintRange -Minimum $RuleData.ValueMin -Maximum $RuleData.ValueMax -ErrorAction Stop
+                return New-SpbmRule -Capability $cap -Value $range -ErrorAction Stop
+            } catch {
+                Write-Host "         [WARN] Range constraint not supported in this PowerCLI version — using minimum value ($($RuleData.ValueMin)) for '$($RuleData.CapabilityName)'." -ForegroundColor Yellow
+                $val = switch -Regex ($RuleData.ValueMin) {
+                    '^\d+$'   { [int]$RuleData.ValueMin }
+                    default   { $RuleData.ValueMin }
+                }
+                return New-SpbmRule -Capability $cap -Value $val -ErrorAction Stop
+            }
+        }
+        $val = switch ($RuleData.ValueType) {
+            'Boolean' { [bool]::Parse($RuleData.Value) }
+            'Int32'   { [int]$RuleData.Value }
+            'Int64'   { [long]$RuleData.Value }
+            'Double'  { [double]$RuleData.Value }
+            default   { $RuleData.Value }
+        }
+        return New-SpbmRule -Capability $cap -Value $val -ErrorAction Stop
+    }
+    if ($RuleData.Type -eq 'Tag') {
+        $tags = [System.Collections.Generic.List[object]]::new()
+        foreach ($t in @($RuleData.Tags)) {
+            $tag = Get-Tag -Server $ViConn -Name $t.Name -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Category.Name -eq $t.Category } |
+                   Select-Object -First 1
+            if ($tag) { $tags.Add($tag) }
+            else { Write-Host "         [WARN] Tag '$($t.Category)/$($t.Name)' not found — skipped." -ForegroundColor Yellow }
+        }
+        if ($tags.Count -gt 0) {
+            return New-SpbmRule -AnyOfTags $tags.ToArray() -Server $ViConn -ErrorAction Stop
+        }
+        return $null
+    }
+    Write-Host "         [WARN] Unknown rule type '$($RuleData.Type)' — skipped." -ForegroundColor Yellow
+    return $null
 }
 
 # =============================================================================
@@ -406,51 +468,12 @@ if ($Mode -eq 'Import') {
                     $ruleSets    = [System.Collections.Generic.List[object]]::new()
                     $commonRules = [System.Collections.Generic.List[object]]::new()
 
-                    # Helper: build a SpbmRule from serialized data
-                    $buildRule = {
-                        param($ruleData)
-                        if ($ruleData.Type -eq 'Capability') {
-                            $cap = $allCaps | Where-Object { [string]$_.Id -eq $ruleData.CapabilityId } | Select-Object -First 1
-                            if (-not $cap) {
-                                Write-Host "         [WARN] Capability '$($ruleData.CapabilityId)' ($($ruleData.CapabilityName)) not found — rule skipped." -ForegroundColor Yellow
-                                return $null
-                            }
-                            if ($ruleData.ValueType -eq 'Range') {
-                                return New-SpbmRule -Capability $cap -Value (New-SpbmCapabilityConstraintRange -Minimum $ruleData.ValueMin -Maximum $ruleData.ValueMax) -ErrorAction Stop
-                            }
-                            $val = switch ($ruleData.ValueType) {
-                                'Boolean' { [bool]::Parse($ruleData.Value) }
-                                'Int32'   { [int]$ruleData.Value }
-                                'Int64'   { [long]$ruleData.Value }
-                                'Double'  { [double]$ruleData.Value }
-                                default   { $ruleData.Value }
-                            }
-                            return New-SpbmRule -Capability $cap -Value $val -ErrorAction Stop
-                        }
-                        if ($ruleData.Type -eq 'Tag') {
-                            $tags = [System.Collections.Generic.List[object]]::new()
-                            foreach ($t in @($ruleData.Tags)) {
-                                $tag = Get-Tag -Server $viConn -Name $t.Name -ErrorAction SilentlyContinue |
-                                       Where-Object { $_.Category.Name -eq $t.Category } |
-                                       Select-Object -First 1
-                                if ($tag) { $tags.Add($tag) }
-                                else { Write-Host "         [WARN] Tag '$($t.Category)/$($t.Name)' not found — skipped." -ForegroundColor Yellow }
-                            }
-                            if ($tags.Count -gt 0) {
-                                return New-SpbmRule -AnyOfTags $tags.ToArray() -Server $viConn -ErrorAction Stop
-                            }
-                            return $null
-                        }
-                        Write-Host "         [WARN] Unknown rule type '$($ruleData.Type)' — skipped." -ForegroundColor Yellow
-                        return $null
-                    }
-
-                    # Build rule sets
+                    # Build rule sets — uses Build-PolicyRule function defined at script level
                     foreach ($rsData in @($import.RuleSets)) {
                         $rules = [System.Collections.Generic.List[object]]::new()
                         foreach ($ruleData in @($rsData.Rules)) {
-                            $rule = & $buildRule $ruleData
-                            if ($rule) { $rules.Add($rule) }
+                            $rule = Build-PolicyRule -RuleData $ruleData -AllCaps $allCaps -ViConn $viConn
+                            if ($null -ne $rule) { $rules.Add($rule) }
                         }
                         if ($rules.Count -gt 0) {
                             $ruleSets.Add((New-SpbmRuleSet -AllOfRules $rules.ToArray() -ErrorAction Stop))
@@ -460,8 +483,8 @@ if ($Mode -eq 'Import') {
                     # Build common rules
                     if ($import.PSObject.Properties['CommonRules'] -and $import.CommonRules) {
                         foreach ($ruleData in @($import.CommonRules)) {
-                            $rule = & $buildRule $ruleData
-                            if ($rule) { $commonRules.Add($rule) }
+                            $rule = Build-PolicyRule -RuleData $ruleData -AllCaps $allCaps -ViConn $viConn
+                            if ($null -ne $rule) { $commonRules.Add($rule) }
                         }
                     }
 
