@@ -66,11 +66,15 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.0.1
+    Version  : 1.0.2
     Requires : VCF.PowerCLI 9.0+ (recommended) or VMware.PowerCLI 13+
     Tested   : vSphere 9
 
 .CHANGELOG
+    v1.0.2  2026-03-31  Paul van Dieen
+        - Bug fix: -f format strings changed from double-quoted to single-quoted
+          to prevent PS5 from misinterpreting {n} format tokens as script blocks
+
     v1.0.1  2026-03-31  Paul van Dieen
         - Added #Requires -Version 5.1 for explicit PS5 compatibility
         - Refactored $buildRule script block to Build-PolicyRule function with
@@ -106,7 +110,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.0.1'
+$scriptVersion = '1.0.2'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -305,7 +309,7 @@ if ($Mode -eq 'Export') {
                             if ($rs.PSObject.Properties['AllOfRules'] -and $rs.AllOfRules) { $ruleCnt += @($rs.AllOfRules).Count }
                         }
                     }
-                    $line = "   [{0,2}]  {1,-45} ({2} rule set(s), {3} rule(s))" -f ($i + 1), $allPolicies[$i].Name, $rsCnt, $ruleCnt
+                    $line = '   [{0,2}]  {1,-45} ({2} rule set(s), {3} rule(s))' -f ($i + 1), $allPolicies[$i].Name, $rsCnt, $ruleCnt
                     Write-Host $line -ForegroundColor White
                 }
                 Write-Host ""
@@ -415,9 +419,9 @@ if ($Mode -eq 'Import') {
                         $peek    = Get-Content $jsonFiles[$i].FullName -Raw | ConvertFrom-Json
                         $polName = if ($peek.PSObject.Properties['PolicyName'])   { $peek.PolicyName }   else { '?' }
                         $rsCnt   = if ($peek.PSObject.Properties['RuleSetCount']) { $peek.RuleSetCount } else { '?' }
-                        $line = "   [{0,2}]  {1,-35} policy: {2,-35} ({3} rule set(s))" -f ($i + 1), $jsonFiles[$i].Name, $polName, $rsCnt
+                        $line = '   [{0,2}]  {1,-35} policy: {2,-35} ({3} rule set(s))' -f ($i + 1), $jsonFiles[$i].Name, $polName, $rsCnt
                     } catch {
-                        $line = "   [{0,2}]  {1}" -f ($i + 1), $jsonFiles[$i].Name
+                        $line = '   [{0,2}]  {1}' -f ($i + 1), $jsonFiles[$i].Name
                     }
                     Write-Host $line -ForegroundColor White
                 }
