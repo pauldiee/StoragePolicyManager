@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Export or import vCenter VM Storage Policies (SPBM).
 
@@ -66,11 +66,16 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.0.2
+    Version  : 1.0.3
     Requires : VCF.PowerCLI 9.0+ (recommended) or VMware.PowerCLI 13+
     Tested   : vSphere 9
 
 .CHANGELOG
+    v1.0.3  2026-03-31  Paul van Dieen
+        - Bug fix: script re-saved with UTF-8 BOM so PowerShell 5.1 reads em
+          dash characters correctly instead of misinterpreting them as string
+          terminators (U+201D) when using the system default ANSI code page
+
     v1.0.2  2026-03-31  Paul van Dieen
         - Bug fix: -f format strings changed from double-quoted to single-quoted
           to prevent PS5 from misinterpreting {n} format tokens as script blocks
@@ -110,7 +115,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.0.2'
+$scriptVersion = '1.0.3'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
