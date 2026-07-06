@@ -1,0 +1,14 @@
+# Credentials - never commit
+*.cred
+creds/
+
+# Exported storage policies (runtime output)
+*.json
+
+# Logs / temp
+*.log
+*.tmp
+
+# Blog post drafts (local only)
+blogpost*.html
+blogpost*.md
