@@ -66,11 +66,22 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.0.3
-    Requires : VCF.PowerCLI 9.0+ (recommended) or VMware.PowerCLI 13+
+    Version  : 1.1.0
+    Requires : PowerShell 7.4+, VCF.PowerCLI 9.0+ (or VMware.PowerCLI 13+)
     Tested   : vSphere 9
 
 .CHANGELOG
+    v1.1.0  2026-11-16  Paul van Dieen
+        - Minimum PowerShell is now 7.4: VCF.PowerCLI 9.x needs PowerShell 7
+          (KB 409981); #Requires, .NOTES and README updated (#1)
+        - PowerCLI loading imports only VMware.VimAutomation.Storage instead of
+          the whole VCF.PowerCLI bundle, with -ErrorAction Stop (#3)
+        - Stops up front when PowerCLI modules of different versions are
+          already loaded in the session
+        - Load failures show the short error, the loaded VMware.* modules and
+          a link to the jump-host guide (one PowerCLI version per host,
+          completeness check, pitfalls); same text as VDSPortGroupManager
+
     v1.0.3  2026-03-31  Paul van Dieen
         - Bug fix: script re-saved with UTF-8 BOM so PowerShell 5.1 reads em
           dash characters correctly instead of misinterpreting them as string
@@ -98,7 +109,7 @@
         - All cmdlets scoped with -Server to avoid cross-vCenter operations
 #>
 
-#Requires -Version 5.1
+#Requires -Version 7.4
 
 [CmdletBinding()]
 param(
@@ -115,7 +126,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.0.3'
+$scriptVersion = '1.1.0'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -128,26 +139,59 @@ Write-Host "  Blog   : $scriptBlogUrl" -ForegroundColor DarkGray
 Write-Host ('=' * 62) -ForegroundColor DarkCyan
 
 # --- PowerCLI Module Check ----------------------------------------------------
-$vcfModule    = Get-Module -Name VCF.PowerCLI              -ListAvailable
-$legacyModule = Get-Module -Name VMware.VimAutomation.Core -ListAvailable
+# The script needs only VMware.VimAutomation.Storage (and what it requires), not
+# the whole VCF.PowerCLI bundle. Loading problems almost always come from the
+# jump host (several PowerCLI versions side by side, an old one already loaded
+# in the session, an incomplete or blocked offline install); the fix belongs
+# there, so the script only explains what it found and where to read on.
+$jumpHostGuide = 'https://vcf-planning.hollebollevsan.nl/docs/42-jump-host-powershell/'
 
-if (-not $vcfModule -and -not $legacyModule) {
-    Write-Host "  [ERROR] No compatible PowerCLI module found." -ForegroundColor Red
-    Write-Host "          Install-Module -Name VCF.PowerCLI -Scope CurrentUser" -ForegroundColor Yellow
+function Stop-ModuleLoadFailure {
+    param([string]$Reason)
+    Write-Host '  [ERROR] Could not load PowerCLI (VMware.VimAutomation.Storage).' -ForegroundColor Red
+    if ($Reason) { Write-Host "          $Reason" -ForegroundColor Red }
+    Write-Host '          Start a clean session with "pwsh -NoProfile" and run the script first.' -ForegroundColor Yellow
+    Write-Host '          Keep one complete, unblocked PowerCLI version on this host; see the jump-host' -ForegroundColor Yellow
+    Write-Host "          guide, section 4 (completeness check) and 6 (pitfalls): $jumpHostGuide" -ForegroundColor Yellow
+    $loaded = @(Get-Module -Name VMware.*, VCF.PowerCLI)
+    if ($loaded.Count -gt 0) {
+        Write-Host '          Loaded now:' -ForegroundColor Yellow
+        $loaded | Sort-Object Name | ForEach-Object {
+            Write-Host "            $($_.Name) $($_.Version)  ($($_.ModuleBase))" -ForegroundColor Yellow
+        }
+    }
+    exit 1
+}
+function Get-ShortError {
+    param($ErrorRecord)
+    $m = "$($ErrorRecord.Exception.Message)"
+    if ($m -match "`t") { $m = @($m -split "`t" | Where-Object { $_.Trim() })[-1].Trim() }
+    return $m
+}
+
+if (-not (Get-Module -ListAvailable -Name VMware.VimAutomation.Storage)) {
+    Write-Host '  [ERROR] No PowerCLI found (VMware.VimAutomation.Storage is not installed).' -ForegroundColor Red
+    Write-Host '          Install-Module -Name VCF.PowerCLI -Scope CurrentUser' -ForegroundColor Yellow
+    Write-Host "          Without internet access: $jumpHostGuide (section 3)" -ForegroundColor Yellow
     exit 1
 }
 
-if ($vcfModule) {
-    if (-not (Get-Module -Name VCF.PowerCLI)) {
-        Write-Host "  [INFO] Loading VCF.PowerCLI..." -ForegroundColor Cyan
-        Import-Module VCF.PowerCLI -ErrorAction Stop
-    }
-} else {
-    if (-not (Get-Module -Name VMware.VimAutomation.Core)) {
-        Write-Host "  [INFO] Loading VMware.PowerCLI..." -ForegroundColor Cyan
-        Import-Module VMware.VimAutomation.Core -ErrorAction Stop
-    }
+# All VMware.VimAutomation.* modules of one PowerCLI release share one version
+# (13.5.1.x for VCF.PowerCLI 9.1.1); StorageUtility is versioned on its own.
+$loadedVersions = @(Get-Module -Name VMware.VimAutomation.* |
+    Where-Object { $_.Name -ne 'VMware.VimAutomation.StorageUtility' } |
+    ForEach-Object { "$($_.Version)" } | Select-Object -Unique)
+if ($loadedVersions.Count -gt 1) {
+    Stop-ModuleLoadFailure -Reason "PowerCLI modules of different versions are already loaded in this session ($($loadedVersions -join ', '))."
 }
+
+try {
+    Import-Module -Name VMware.VimAutomation.Storage -ErrorAction Stop -WarningAction SilentlyContinue 6>$null
+}
+catch {
+    Stop-ModuleLoadFailure -Reason (Get-ShortError $_)
+}
+Write-Host "  [INFO] PowerCLI $(@(Get-Module -Name VMware.VimAutomation.Storage)[0].Version) loaded." -ForegroundColor Cyan
 
 # --- Credential Management ----------------------------------------------------
 $safeVc = $vCenterServer -replace '[^\w\-.]', '_'

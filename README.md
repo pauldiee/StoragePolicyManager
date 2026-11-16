@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.0.3 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.1.0 | Export / import vCenter storage policies — **vSphere 9 only** |
 
 ---
 
@@ -26,7 +26,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Requirement | Notes |
 |---|---|
-| PowerShell 5.1+ | Included with Windows 10 / Server 2016 and later |
+| PowerShell 7.4+ | VCF.PowerCLI 9.x needs PowerShell 7 ([KB 409981](https://knowledge.broadcom.com/external/article/409981)); Windows ships 5.1, so start the script from `pwsh` |
 | VCF.PowerCLI 9.0+ or VMware.PowerCLI 13+ | `Install-Module -Name VCF.PowerCLI -Scope CurrentUser` |
 | Network access | HTTPS to vCenter Server |
 
