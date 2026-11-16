@@ -132,6 +132,18 @@ Credentials are encrypted and saved as `<hostname>.cred` next to the script usin
 
 ---
 
+## Testing in a lab
+
+`tests/New-SPMTestSet.ps1` builds a tag category `SPM-T-Tier` (Gold, Silver, Bronze) and five policies in a **lab** vCenter (`-Mode Create`): one tag rule, two rule sets (Gold OR Silver), vSAN FTT 1, vSAN FTT 1 with stripe width 2 and force provisioning, and a policy on the Bronze tag. `-Mode Tags` creates only the category with Gold and Silver: run it on the target first (tags go across before policies), so the Bronze policy meets a tag that doesn't exist there. `-Mode Show` lists the rule sets; `-Mode Remove` deletes the `SPM-T*` policies and the tag category. It only touches `SPM-T*` objects.
+
+Suggested run: Create on the source, Tags on the target, Export each policy with `-PolicyName` and `-FilePath <folder>`, Import on the target, Show on both sides, Remove on both.
+
+Lab findings (vCenter 8.0.3 build 25600417 to 9.1.1 build 25784172, 2026-11-16, clean `pwsh -NoProfile`):
+
+- Four of five policies imported with the same rule sets, the vSAN ones and the two-rule-set policy included.
+- The Bronze policy reports the missing tag (*"not found — skipped"*) and then fails with SPBM's *"The storage policy cannot have both CommonRule and AnyOfRuleSets null or empty"* (#6).
+- For Export, `-FilePath` is a folder; a file name is ignored and the file lands next to the script (#6).
+
 ## Author
 
 Paul van Dieen — [hollebollevsan.nl](https://www.hollebollevsan.nl)
