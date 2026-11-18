@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.1.1 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.2.0 | Export / import vCenter storage policies — **vSphere 9 only** |
 
 ---
 
@@ -38,8 +38,15 @@ Setting up PowerShell 7 and VCF.PowerCLI on a jump host, with or without interne
 # Interactive export — lists all policies, prompts for selection
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export
 
-# Non-interactive export — export a specific policy directly
+# Fully interactive: mode menu, folder prompt, picker
+.\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab
+
+# Non-interactive export — one policy, or several names and wildcards
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export -PolicyName "vSAN Gold"
+.\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export -PolicyName 'vSAN*','Gold*' -FilePath C:\PolicyBackups
+
+# Import every policy export in a folder, without the picker
+.\Invoke-StoragePolicyManager.ps1 -vCenterServer vc02.vcf.lab -Mode Import -FilePath 'C:\PolicyBackups\*.json'
 
 # Export to a specific directory
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export -FilePath C:\PolicyBackups
@@ -65,40 +72,66 @@ Setting up PowerShell 7 and VCF.PowerCLI on a jump host, with or without interne
 
 Credentials are encrypted and saved as `<hostname>.cred` next to the script using `Export-Clixml` (DPAPI-protected, tied to the current Windows user).
 
+## How a run goes
+
+Without `-Mode` a menu asks for Export or Import. Without `-FilePath` the script then asks for the folder: **Enter** keeps the script directory (the default), **B** opens the Windows folder browser (only where a GUI is available), or type a path. Import shows how many JSON files the folder holds and asks again when it holds none. An export with `-PolicyName` doesn't ask. Everything the console shows, the per-rule warnings included, also goes to `Logs\StoragePolicyManager_<timestamp>.log` next to the script (`-LogDirectory` to change it).
+
 ## Interactive picker
 
 **Export** — lists all storage policies with rule set and rule counts:
 
 ```
-  Storage policies on vc01.vcf.lab:
-
-   [ 1]  vSAN Default Storage Policy              (1 rule set(s), 4 rule(s))
-   [ 2]  vSAN Gold                                (1 rule set(s), 3 rule(s))
-   [ 3]  vSAN Silver                              (1 rule set(s), 2 rule(s))
-
-  Enter number(s) to export (comma-separated, or 'all'):
+  Policies on this vCenter: select the ones to EXPORT
+  [1]  vSAN Default Storage Policy                   (1 rule set(s), 4 rule(s))
+  [2]  vSAN Gold                                     (1 rule set(s), 3 rule(s))
+  [3]  vSAN Silver                                   (1 rule set(s), 2 rule(s))
 ```
 
 **Import** — lists JSON files found in the directory with policy name and rule set count:
 
 ```
-  JSON files in C:\PolicyBackups:
-
-   [ 1]  vSAN_Gold.json          policy: vSAN Gold                    (1 rule set(s))
-   [ 2]  vSAN_Silver.json        policy: vSAN Silver                  (1 rule set(s))
-
-  Enter number(s) to import (comma-separated, or 'all'):
+  JSON files in C:\PolicyBackups: select the ones to IMPORT
+  [1]  vSAN_Gold.json                      policy: vSAN Gold                      (1 rule set(s))
+  [2]  vSAN_Silver.json                    policy: vSAN Silver                    (1 rule set(s))
 ```
+
+The picker accepts single numbers, comma-separated lists, ranges (`2-6`), combinations (`1,3-5,8`), `all`, and `cancel` (or `exit`, `quit`, `q`).
+
+### Filtering a picker
+
+The picker filters by name. While a filter is on, the prompt shows it, for example `Your selection (filter: /vsan, 4 shown)`.
+
+| To | Type |
+|---|---|
+| Narrow the list | A wildcard (`*vsan*`) or `/text` for a substring |
+| Change the filter | The new filter straight away; it searches the full list again, not within the previous filter |
+| Clear the filter | `reset`, or just Enter |
+| See everything in the current list | `list` |
+
+The list is renumbered after every filter and after clearing it, so pick the number from the list shown just above the prompt. `all` takes what the filter shows. A filter that matches nothing leaves the list as it was. Above 50 items the picker shows a few examples and asks for a filter instead of printing the whole list.
+
+## Failures and exit codes
+
+A policy that fails to export or import is logged in red as `FAILED …`, with vCenter's own message. The summary is red when something failed, yellow when something was only skipped (the policy already exists, rule parts left out because a capability or tag is missing on the target), green otherwise, and lists every failure.
+
+| Code | Meaning |
+|---|---|
+| 0 | Finished without failures (skips are allowed) |
+| 1 | Something failed: see the red `FAILED` lines and the summary, or the script could not start (PowerCLI, connection, no policy matches `-PolicyName`, `-FilePath` not found) |
+| 2 | Stopped because a prompt needed console input in an unattended run; the message names the parameters to pass. Save the credential first with one interactive run |
+
+From a scheduled task or another script, start it with `pwsh -Command` rather than `pwsh -File`: with `-File`, `-PolicyName 'a','b'` arrives as one string.
 
 ## Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-vCenterServer` | `string` | *(required)* | FQDN or IP of the vCenter Server |
-| `-Mode` | `Export\|Import` | *(required)* | Operation mode |
-| `-PolicyName` | `string` | *(interactive)* | Policy to export — omit to use the interactive picker |
-| `-FilePath` | `string` | Next to script | Export: output directory. Import: JSON file or directory to scan |
+| `-Mode` | `Export\|Import` | *(menu)* | Operation mode; a menu asks when omitted |
+| `-PolicyName` | `string[]` | *(interactive)* | Export: policy names or wildcards — omit to use the interactive picker |
+| `-FilePath` | `string` | Next to script | Export: output directory. Import: a JSON file, a wildcard (every match is imported) or a folder to pick from. Asked after the mode when omitted |
 | `-NewPolicyName` | `string` | *(from file)* | Rename the policy on import (single file only) |
+| `-LogDirectory` | `string` | `Logs\` next to script | Where the log file goes |
 | `-CredentialPath` | `string` | Next to script | Path to the encrypted credential file |
 | `-SkipCertificateValidation` | `switch` | — | Skip TLS validation — for lab use |
 | `-ResetCredentials` | `switch` | — | Force a new credential prompt |
