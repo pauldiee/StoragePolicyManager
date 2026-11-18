@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.2.0 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.3.0 | Export / import vCenter storage policies — **vSphere 9 only** |
 
 ---
 
@@ -74,7 +74,7 @@ Credentials are encrypted and saved as `<hostname>.cred` next to the script usin
 
 ## How a run goes
 
-Without `-Mode` a menu asks for Export or Import. Without `-FilePath` the script then asks for the folder: **Enter** keeps the script directory (the default), **B** opens the Windows folder browser (only where a GUI is available), or type a path. Import shows how many JSON files the folder holds and asks again when it holds none. An export with `-PolicyName` doesn't ask. Everything the console shows, the per-rule warnings included, also goes to `Logs\StoragePolicyManager_<timestamp>.log` next to the script (`-LogDirectory` to change it).
+Without `-Mode` a menu asks for Export or Import. Without `-FilePath` the script then asks for the folder: **Enter** keeps the script directory (the default), **B** opens the Windows folder browser (only where a GUI is available), or type a path. Import shows how many JSON files the folder holds and asks again when it holds none. An export with `-PolicyName` doesn't ask. Everything the console shows, the per-rule warnings included, also goes to `Logs\StoragePolicyManager_<timestamp>.log` next to the script (`-LogDirectory` to change it). Long steps show a progress bar with "n of N: item", the percentage and the time left; it disappears when the step ends.
 
 ## Interactive picker
 
