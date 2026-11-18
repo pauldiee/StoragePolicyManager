@@ -66,11 +66,17 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.1.0
+    Version  : 1.1.1
     Requires : PowerShell 7.4+, VCF.PowerCLI 9.0+ (or VMware.PowerCLI 13+)
     Tested   : vSphere 9
+#>
 
-.CHANGELOG
+<# CHANGELOG
+    v1.1.1  2026-11-18  Paul van Dieen
+        - Get-Help shows the full help again: the changelog moved out of the
+          help block into its own comment block (the unknown .CHANGELOG
+          keyword made Get-Help ignore the whole help block)
+
     v1.1.0  2026-11-16  Paul van Dieen
         - Minimum PowerShell is now 7.4: VCF.PowerCLI 9.x needs PowerShell 7
           (KB 409981); #Requires, .NOTES and README updated (#1)
@@ -126,7 +132,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.1.0'
+$scriptVersion = '1.1.1'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
