@@ -82,12 +82,20 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.3.0
+    Version  : 1.3.1
     Requires : PowerShell 7.4+, VCF.PowerCLI 9.0+ (or VMware.PowerCLI 13+)
     Tested   : vSphere 9
 #>
 
 <# CHANGELOG
+    v1.3.1  2026-11-19  Paul van Dieen
+        - The log file is written through one open writer, flushed per
+          line, instead of Add-Content per line (2.5 ms each; as in
+          VIFolderManager 1.5.1)
+        - Scale run (#14) on VCF 9.1.1 with tests/New-SPMScaleSet.ps1:
+          150 policies exported in 4 s and imported in about 80 s; a
+          re-export after the import is identical (tests/TESTPLAN.md)
+
     v1.3.0  2026-11-18  Paul van Dieen
         - Progress bar during long steps (#12): "n of N: item", the
           percentage and the time left, in the export and import per policy.
@@ -179,7 +187,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.3.0'
+$scriptVersion = '1.3.1'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -253,6 +261,8 @@ if (-not (Test-Path -Path $scriptDirLogs)) { New-Item -ItemType Directory -Path 
 $timestamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $LogFile   = Join-Path $scriptDirLogs "StoragePolicyManager_$timestamp.log"
 
+$script:LogWriter = $null
+
 function Write-Log {
     param(
         [Parameter(Mandatory = $true)]
@@ -263,7 +273,17 @@ function Write-Log {
     )
     $ts    = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$ts] [$Level] $Message"
-    Add-Content -Path $LogFile -Value $entry
+    # One open writer for the whole run, flushed per line (#14): Add-Content
+    # opens the file for every line, 2.5 ms each (7 s for 3000 lines).
+    # Shared for reading and deleting, so the file can be tailed or removed
+    # while a session still holds it.
+    if ($null -eq $script:LogWriter) {
+        $fs = [System.IO.FileStream]::new($LogFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+        $script:LogWriter = [System.IO.StreamWriter]::new($fs, [System.Text.UTF8Encoding]::new($false))
+        $script:LogWriter.AutoFlush = $true
+    }
+    $script:LogWriter.WriteLine($entry)
     switch ($Level) {
         'SUCCESS' { Write-Host "  $entry" -ForegroundColor Green  }
         'WARNING' { Write-Host "  $entry" -ForegroundColor Yellow }
@@ -1080,7 +1100,9 @@ Write-Log "Disconnected from $vCenterServer."
 if ($script:RunFailures.Count -gt 0) {
     Write-Log "===== Script finished with $($script:RunFailures.Count) failure(s); see the summary above =====" -Level ERROR
     Write-Host "`n  Log file: $LogFile`n" -ForegroundColor DarkGray
+    $script:LogWriter.Dispose()
     exit 1
 }
 Write-Log '===== Script finished =====' -Level SUCCESS
 Write-Host "`n  Log file: $LogFile`n" -ForegroundColor DarkGray
+$script:LogWriter.Dispose()
