@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.3.0 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.3.1 | Export / import vCenter storage policies — **vSphere 9 only** |
 
 ---
 
@@ -176,6 +176,8 @@ Lab findings (vCenter 8.0.3 build 25600417 to 9.1.1 build 25784172, 2026-11-16, 
 - Four of five policies imported with the same rule sets, the vSAN ones and the two-rule-set policy included.
 - The Bronze policy reports the missing tag (*"not found — skipped"*) and then fails with SPBM's *"The storage policy cannot have both CommonRule and AnyOfRuleSets null or empty"* (#6).
 - For Export, `-FilePath` is a folder; a file name is ignored and the file lands next to the script (#6).
+
+`tests/New-SPMScaleSet.ps1` builds a large set for scale tests: a tag category `SPM-S-Tier` with 20 tags and 150 policies (`-PolicyCount`) that take turns between tag rules (one to three rule sets), vSAN rules (failures to tolerate, stripe width, object space reservation, force provisioning) and a vSAN rule plus a tag rule in one rule set. `-Mode Tags` creates only the tags (for an import target), `-Mode Remove` cleans up. Scale on VCF 9.1.1 (2026-11-19): 150 policies exported in 4 s and imported in about 80 s, and a re-export after the import was identical. Test cases: `tests/TESTPLAN.md`.
 
 ## Author
 
