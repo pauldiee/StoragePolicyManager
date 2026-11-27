@@ -5,6 +5,8 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 | Script | Version | Purpose |
 |---|---|---|
 | `Invoke-StoragePolicyManager.ps1` | 1.3.1 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `tests/New-SPMTestSet.ps1` | 1.0.1 | Builds, shows and removes a throwaway set of storage policies in a **lab** vCenter |
+| `tests/New-SPMScaleSet.ps1` | 0.1.0 | Builds and removes a large set of storage policies in a **lab** vCenter, to test at scale |
 
 ---
 
