@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Export or import vCenter VM Storage Policies (SPBM).
 
@@ -56,6 +56,15 @@
 .PARAMETER ResetCredentials
     Force a new credential prompt even if a saved credential file exists.
 
+.PARAMETER DryRun
+    Import mode: show what would be created ([DryRun] Would ... lines, with
+    the rule parts that would be left out, "would be" in the summary) without
+    changing anything on the vCenter. Ignored with a warning in Export mode.
+
+.EXAMPLE
+    # Preview an import: what would be created, nothing changed
+    .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc02.vcf.lab -Mode Import -FilePath 'C:\PolicyBackups\*.json' -DryRun
+
 .EXAMPLE
     # Interactive export — lists all policies, prompts for selection
     .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export
@@ -87,12 +96,19 @@
 .NOTES
     Author   : Paul van Dieen
     Blog     : https://www.hollebollevsan.nl
-    Version  : 1.4.0
+    Version  : 1.5.0
     Requires : PowerShell 7.4+, VCF.PowerCLI 9.0+ (or VMware.PowerCLI 13+)
     Tested   : vSphere 9
 #>
 
 <# CHANGELOG
+    v1.5.0  2026-11-27  Paul van Dieen
+        - -DryRun for Import (#16, W30): the rules are built as in a real
+          import (so the rule parts that would be left out show), then a
+          [DryRun] Would create line per policy instead of creating it; the
+          summary says 'would be' and ends with 'Dry run: nothing was
+          changed.'. Ignored with a warning in Export mode
+
     v1.4.0  2026-11-27  Paul van Dieen
         - Start without -vCenterServer (W38, as nsx-segment-migration and
           VITagManager 1.5.0): the script asks for the vCenter and lists the
@@ -198,13 +214,14 @@ param(
     [string]$LogDirectory = '',
     [string]$CredentialPath,
     [switch]$SkipCertificateValidation,
-    [switch]$ResetCredentials
+    [switch]$ResetCredentials,
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptVersion = '1.4.0'
+$scriptVersion = '1.5.0'
 $scriptAuthor  = 'Paul van Dieen'
 $scriptBlogUrl = 'https://www.hollebollevsan.nl'
 $scriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -703,6 +720,9 @@ if (-not $Mode) {
 if ($PolicyName.Count -gt 0 -and $Mode -ne 'Export') {
     Write-Host '  [WARN] -PolicyName only applies in Export mode and will be ignored.' -ForegroundColor Yellow
 }
+if ($DryRun -and $Mode -ne 'Import') {
+    Write-Host '  [WARN] -DryRun only applies in Import mode and will be ignored.' -ForegroundColor Yellow
+}
 if ($NewPolicyName -and $Mode -ne 'Import') {
     Write-Host '  [WARN] -NewPolicyName only applies in Import mode and will be ignored.' -ForegroundColor Yellow
 }
@@ -821,6 +841,7 @@ if ($ResetCredentials -or -not (Test-Path $CredentialPath)) {
 # --- Connect to vCenter -------------------------------------------------------
 Write-Log "===== StoragePolicyManager started (Mode: $Mode) ====="
 Write-Log "vCenter:  $vCenterServer"
+if ($DryRun -and $Mode -eq 'Import') { Write-Log 'DRY RUN: nothing will be changed on the vCenter.' -Level WARNING }
 Write-Log "Folder:   $(if ($FilePath) { $FilePath } else { $scriptDir })"
 Write-Log "Log File: $LogFile"
 Write-Log "Connecting to $vCenterServer ..."
@@ -1145,6 +1166,15 @@ if ($Mode -eq 'Import') {
                 if ($ruleSets.Count -gt 0)    { $newPolParams['AnyOfRuleSets'] = $ruleSets.ToArray() }
                 if ($commonRules.Count -gt 0)  { $newPolParams['CommonRule']   = $commonRules.ToArray() }
 
+                # The rules above are built locally (nothing written yet), so a
+                # dry run shows the same skipped rule parts as a real import
+                if ($DryRun) {
+                    $leftOut = if ($script:RuleSkips -gt 0) { ", $($script:RuleSkips) rule part(s) left out (see the warnings above)" } else { '' }
+                    Write-Log "[DryRun] Would create '$targetName' with $($ruleSets.Count) rule set(s)$(if ($commonRules.Count -gt 0) { " and $($commonRules.Count) common rule(s)" })$leftOut."
+                    if ($script:RuleSkips -gt 0) { $partial++ }
+                    $created++
+                    continue
+                }
                 $null = New-SpbmStoragePolicy @newPolParams
                 if ($script:RuleSkips -gt 0) {
                     Write-Log "'$targetName' created with $($script:RuleSkips) rule part(s) left out (see the warnings above): $($ruleSets.Count) rule set(s) applied." -Level WARNING
@@ -1160,8 +1190,11 @@ if ($Mode -eq 'Import') {
         Complete-Progress -Id 2
         Complete-Progress
         $importFail = @($script:RunFailures | Where-Object { $_.Action -eq 'Import' }).Count
-        Write-RunSummary -Line "Import complete: $created policy(s) created ($partial with parts left out), $skipped skipped (already exists), $importFail failed." `
+        $wb = if ($DryRun) { 'would be ' } else { '' }
+        $head = if ($DryRun) { 'Dry run complete' } else { 'Import complete' }
+        Write-RunSummary -Line "${head}: $created policy(s) ${wb}created ($partial with parts left out), $skipped skipped (already exists), $importFail failed." `
             -Failed $importFail -Skipped ($skipped + $partial) -Actions 'Import'
+        if ($DryRun) { Write-Log 'Dry run: nothing was changed.' -Level WARNING }
     }
 }
 
