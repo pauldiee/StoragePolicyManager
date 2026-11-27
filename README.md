@@ -8,6 +8,16 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 ---
 
+## Step-by-step guide
+
+StoragePolicyManager is step 4 of carrying the vCenter configuration over to a new VCF 9 vCenter in a side-by-side migration. The guide on docs.hollebollevsan.nl walks through it, with the commands and a check per step:
+
+- [Carrying over the vCenter configuration, step 4: storage policies](https://docs.hollebollevsan.nl/docs/30-carry-over-vcenter-configuration/#step-4-storage-policies): export the policies from the source, import or map them on the target, and review the rules that were skipped.
+- [The order, and why](https://docs.hollebollevsan.nl/docs/30-carry-over-vcenter-configuration/#the-order-and-why): storage policies come after the tags (step 2, VITagManager), because tag-based rules need them.
+- [Side-by-side migration: build new, then move the workloads](https://docs.hollebollevsan.nl/docs/29-side-by-side-migration/#toolkits): the whole route, and how this toolkit fits with the others.
+
+---
+
 ## What it does
 
 - **Export** — connects to a vCenter, lists all storage policies with rule set and rule counts, and lets you select one or more to export. Each policy is saved as a portable JSON file containing the full rule structure.
