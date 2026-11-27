@@ -50,6 +50,18 @@ addresses live outside this repository.
 
 The home vCenter (.65) was off during a first run: picking it gave "Failed to connect ... (192.168.2.65:443)", exit 1. Not provoked: the error trap.
 
+**1.5.0 (-DryRun, #16, W30), 2026-11-27, lab B (vCenter 9.0.2):** an export of the 18 storage policies of lab B (read-only), then dry-run imports into lab B itself.
+
+| # | Steps | Result |
+|---|---|---|
+| D1 | `vSAN Stretched ESA Default Policy - RAID6` with `-NewPolicyName SPM-DryRun-Test -DryRun` | **pass**: "DRY RUN: nothing will be changed", "[DryRun] Would create 'SPM-DryRun-Test' with 1 rule set(s).", "Dry run complete: 1 policy(s) would be created ...", "Dry run: nothing was changed.", exit 0 |
+| D2 | Same file, own name, `-DryRun` | **pass**: "already exists: skipped", exit 0 |
+| D3 | All 18 files, `-DryRun` | **pass**: "0 policy(s) would be created ..., 18 skipped (already exists)", exit 0 |
+| D4 | `-Mode Export -DryRun` | **pass**: "[WARN] -DryRun only applies in Import mode and will be ignored." |
+| D5 | Check afterwards | **pass**: "No policy matches 'SPM-DryRun-Test'" |
+
+Not covered: a dry run with rule parts left out (no export with unknown capabilities or tags at hand); the rules are built the same way as in a real import, so the warnings come from the same code.
+
 ## Open points
 
 - Import into a second vCenter at scale (LA to LB) not yet run: needs a

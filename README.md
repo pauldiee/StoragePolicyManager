@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.4.0 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.5.0 | Export / import vCenter storage policies — **vSphere 9 only** |
 | `tests/New-SPMTestSet.ps1` | 1.0.1 | Builds, shows and removes a throwaway set of storage policies in a **lab** vCenter |
 | `tests/New-SPMScaleSet.ps1` | 0.1.0 | Builds and removes a large set of storage policies in a **lab** vCenter, to test at scale |
 
@@ -62,6 +62,9 @@ Setting up PowerShell 7 and VCF.PowerCLI on a jump host, with or without interne
 
 # Import every policy export in a folder, without the picker
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc02.vcf.lab -Mode Import -FilePath 'C:\PolicyBackups\*.json'
+
+# Preview the same import: what would be created, nothing changed
+.\Invoke-StoragePolicyManager.ps1 -vCenterServer vc02.vcf.lab -Mode Import -FilePath 'C:\PolicyBackups\*.json' -DryRun
 
 # Export to a specific directory
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export -FilePath C:\PolicyBackups
@@ -150,6 +153,7 @@ From a scheduled task or another script, start it with `pwsh -Command` rather th
 | `-CredentialPath` | `string` | Next to script | Path to the encrypted credential file |
 | `-SkipCertificateValidation` | `switch` | — | Accept a certificate this machine does not trust (lab use). Without it the script asks whether to go on without the check for this run; an unattended run stops with exit code 2 (before W38 such a vCenter was connected silently) (1.4.0) |
 | `-ResetCredentials` | `switch` | — | Force a new credential prompt |
+| `-DryRun` | `switch` | — | Import: show what would be created, with the rule parts that would be left out (`[DryRun] Would ...` lines, "would be" in the summary), without changing anything (1.5.0). Ignored with a warning in Export mode |
 
 ## Export file format
 
