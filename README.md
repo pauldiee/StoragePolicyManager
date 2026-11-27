@@ -82,7 +82,7 @@ Setting up PowerShell 7 and VCF.PowerCLI on a jump host, with or without interne
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export -ResetCredentials
 ```
 
-Credentials are encrypted and saved as `<hostname>.cred` next to the script using `Export-Clixml` (DPAPI-protected, tied to the current Windows user).
+The first run asks for the vCenter login and saves it; see [Credentials](#credentials).
 
 ## How a run goes
 
@@ -190,6 +190,10 @@ Lab findings (vCenter 8.0.3 build 25600417 to 9.1.1 build 25784172, 2026-11-16, 
 - For Export, `-FilePath` is a folder; a file name is ignored and the file lands next to the script (#6).
 
 `tests/New-SPMScaleSet.ps1` builds a large set for scale tests: a tag category `SPM-S-Tier` with 20 tags and 150 policies (`-PolicyCount`) that take turns between tag rules (one to three rule sets), vSAN rules (failures to tolerate, stripe width, object space reservation, force provisioning) and a vSAN rule plus a tag rule in one rule set. `-Mode Tags` creates only the tags (for an import target), `-Mode Remove` cleans up. Scale on VCF 9.1.1 (2026-11-19): 150 policies exported in 4 s and imported in about 80 s, and a re-export after the import was identical. Test cases: `tests/TESTPLAN.md`.
+
+## Credentials
+
+Credentials are encrypted and saved as `<hostname>.cred` next to the script using `Export-Clixml` (DPAPI-protected, tied to the current Windows user). `*.cred` files are git-ignored.
 
 ## Author
 
