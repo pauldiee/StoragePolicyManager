@@ -37,6 +37,19 @@ addresses live outside this repository.
 | S4 | Export again, compare with S2 (without the export time) | 0 differences | **pass** |
 | S5 | Remove | Policies and tag category gone | **pass** |
 
+**1.4.0 (W38, #9), 2026-11-27, lab B (vCenter 9.0.2, certificate not trusted by the laptop):** start without `-vCenterServer`, certificate question, error trap. `-Mode Export -FilePath <folder>` (without `-FilePath` a folder prompt comes first); answers from stdin; read-only.
+
+| # | Steps | Result |
+|---|---|---|
+| W1 | No `-vCenterServer`; `1` at the vCenter list, `y` at the certificate question, `q` at the policy picker | **pass**: list `[1] vc-mgmt-a.site-a.vcf.two`, `[2] vc-mgmt-a.site-a.vcf.lab`, `[3] 192.168.2.65`; WARNING "The certificate of ... is not trusted ..."; "Certificate check off for this run"; connected (9.0.2); "Cancelled.", exit 0 |
+| W2 | Same, `n` | **pass**: ERROR "Failed to connect ...: Error: Invalid server certificate ...", exit 1 |
+| W3 | `-vCenterServer` given, stdin closed | **pass**: "No console input available ... Continue without checking the certificate for this run? (y/N)", exit 2 |
+| W4 | `-SkipCertificateValidation`, `q` at the picker | **pass**: no question, connected, exit 0 |
+| W5 | `q` at the vCenter prompt | **pass**: "Cancelled.", exit 0 |
+| W6 | No `-vCenterServer`, stdin closed | **pass**: "No console input ... The script asked: vCenter", exit 2 |
+
+The home vCenter (.65) was off during a first run: picking it gave "Failed to connect ... (192.168.2.65:443)", exit 1. Not provoked: the error trap.
+
 ## Open points
 
 - Import into a second vCenter at scale (LA to LB) not yet run: needs a
