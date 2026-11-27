@@ -4,7 +4,7 @@ A PowerShell utility to export and import vCenter VM Storage Policies (SPBM) —
 
 | Script | Version | Purpose |
 |---|---|---|
-| `Invoke-StoragePolicyManager.ps1` | 1.3.1 | Export / import vCenter storage policies — **vSphere 9 only** |
+| `Invoke-StoragePolicyManager.ps1` | 1.4.0 | Export / import vCenter storage policies — **vSphere 9 only** |
 | `tests/New-SPMTestSet.ps1` | 1.0.1 | Builds, shows and removes a throwaway set of storage policies in a **lab** vCenter |
 | `tests/New-SPMScaleSet.ps1` | 0.1.0 | Builds and removes a large set of storage policies in a **lab** vCenter, to test at scale |
 
@@ -50,7 +50,10 @@ Setting up PowerShell 7 and VCF.PowerCLI on a jump host, with or without interne
 # Interactive export — lists all policies, prompts for selection
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab -Mode Export
 
-# Fully interactive: mode menu, folder prompt, picker
+# Fully interactive, including the vCenter (saved ones as numbers)
+.\Invoke-StoragePolicyManager.ps1
+
+# Fully interactive for one vCenter: mode menu, folder prompt, picker
 .\Invoke-StoragePolicyManager.ps1 -vCenterServer vc01.vcf.lab
 
 # Non-interactive export — one policy, or several names and wildcards
@@ -138,14 +141,14 @@ From a scheduled task or another script, start it with `pwsh -Command` rather th
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `-vCenterServer` | `string` | *(required)* | FQDN or IP of the vCenter Server |
+| `-vCenterServer` | `string` | *(asked)* | FQDN or IP of the vCenter Server. Left out: the script asks for it and lists the vCenters with a saved credential as numbers (1.4.0) |
 | `-Mode` | `Export\|Import` | *(menu)* | Operation mode; a menu asks when omitted |
 | `-PolicyName` | `string[]` | *(interactive)* | Export: policy names or wildcards — omit to use the interactive picker |
 | `-FilePath` | `string` | Next to script | Export: output directory. Import: a JSON file, a wildcard (every match is imported) or a folder to pick from. Asked after the mode when omitted |
 | `-NewPolicyName` | `string` | *(from file)* | Rename the policy on import (single file only) |
 | `-LogDirectory` | `string` | `Logs\` next to script | Where the log file goes |
 | `-CredentialPath` | `string` | Next to script | Path to the encrypted credential file |
-| `-SkipCertificateValidation` | `switch` | — | Skip TLS validation — for lab use |
+| `-SkipCertificateValidation` | `switch` | — | Accept a certificate this machine does not trust (lab use). Without it the script asks whether to go on without the check for this run; an unattended run stops with exit code 2 (before W38 such a vCenter was connected silently) (1.4.0) |
 | `-ResetCredentials` | `switch` | — | Force a new credential prompt |
 
 ## Export file format

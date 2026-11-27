@@ -37,6 +37,12 @@ addresses live outside this repository.
 | S4 | Export again, compare with S2 (without the export time) | 0 differences | **pass** |
 | S5 | Remove | Policies and tag category gone | **pass** |
 
+**1.4.0 (W38, #9), 2026-11-27, the home vCenter 8 (192.168.2.65), which was off:** start without `-vCenterServer`, certificate question, error trap. `-Mode Export`; answers from stdin.
+
+| # | Steps | Result |
+|---|---|---|
+| W1 | No `-vCenterServer`; pick the vCenter by number, `y` at the certificate question, `q` at the first picker | **partly**: list `[1] 192.168.2.65`, `[2] vc-mgmt-a.site-a.vcf.lab`; `1`; "Failed to connect ... connected host has failed to respond (192.168.2.65:443)", exit 1. The certificate question is **not tested** here: no saved credential for lab B, lab A down, the home vCenter off. Same code as VITagManager 1.5.0 (V1-V6 there) |
+
 ## Open points
 
 - Import into a second vCenter at scale (LA to LB) not yet run: needs a
